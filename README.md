@@ -349,6 +349,8 @@ Base values are documented in `backend/.env.example`. Common ones to care about:
 
 # Development
 
+For contributor workflow, `make dev` starts the app in local single-user mode so you can reproduce editor bugs without going through login/onboarding. Use `make dev-auth` if you need to test local auth or OIDC flows from your `backend/.env`.
+
 <details>
 <summary>Clone the Repository</summary>
 

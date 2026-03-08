@@ -111,10 +111,10 @@ export const UIOptions = {
   canvasActions: {
     saveToActiveFile: false,
     loadScene: false,
-    export: { saveFileToDisk: false },
+    export: false,
     toggleTheme: true,
   },
-};
+} as const;
 
 export { getInitialsFromName } from "../../utils/user";
 

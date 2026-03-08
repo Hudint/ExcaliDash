@@ -367,7 +367,7 @@ export const Editor: React.FC = () => {
 
     const socketUrl = import.meta.env.VITE_API_URL === '/api'
       ? window.location.origin
-      : (import.meta.env.VITE_API_URL || 'http://localhost:8000');
+      : (import.meta.env.VITE_API_URL || import.meta.env.VITE_DEV_BACKEND_URL || 'http://localhost:8000');
 
     const socket = io(socketUrl, {
       path: '/socket.io',
