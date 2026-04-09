@@ -35,6 +35,7 @@ interface OidcConfig {
   enforced: boolean;
   providerName: string;
   issuerUrl: string | null;
+  discoveryUrl: string | null;
   clientId: string | null;
   clientSecret: string | null;
   redirectUri: string | null;
@@ -43,6 +44,8 @@ interface OidcConfig {
   scopes: string;
   emailClaim: string;
   emailVerifiedClaim: string;
+  groupsClaim: string;
+  adminGroups: string[];
   requireEmailVerified: boolean;
   jitProvisioning: boolean;
   firstUserAdmin: boolean;
@@ -90,6 +93,15 @@ const getOptionalOidcSigningAlg = (key: string): string | null => {
   }
 
   return normalized;
+};
+
+const parseCsvEnvList = (key: string): string[] => {
+  const raw = process.env[key];
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
 };
 
 const getOptionalOidcTokenEndpointAuthMethod = (
@@ -194,14 +206,23 @@ const parseAuthMode = (rawValue: string | undefined): AuthMode => {
 
 const resolveOidcConfig = (authMode: AuthMode): OidcConfig => {
   const issuerUrl = getOptionalTrimmedEnv("OIDC_ISSUER_URL");
+  const discoveryUrl = getOptionalTrimmedEnv("OIDC_DISCOVERY_URL");
   const clientId = getOptionalTrimmedEnv("OIDC_CLIENT_ID");
   const clientSecret = getOptionalTrimmedEnv("OIDC_CLIENT_SECRET");
   const redirectUri = getOptionalTrimmedEnv("OIDC_REDIRECT_URI");
+  const groupsClaim = getOptionalEnv("OIDC_GROUPS_CLAIM", "groups").trim();
+  const adminGroups = parseCsvEnvList("OIDC_ADMIN_GROUPS");
   const requiredWhenEnabled = {
     OIDC_ISSUER_URL: issuerUrl,
     OIDC_CLIENT_ID: clientId,
     OIDC_REDIRECT_URI: redirectUri,
   };
+
+  if (groupsClaim.length === 0) {
+    throw new Error(
+      "Invalid OIDC_GROUPS_CLAIM: must be a non-empty claim key/path"
+    );
+  }
 
   const enabled = authMode !== "local";
   const missingRequired = Object.entries(requiredWhenEnabled)
@@ -214,7 +235,9 @@ const resolveOidcConfig = (authMode: AuthMode): OidcConfig => {
   }
 
   if (!enabled) {
-    const hasOidcVars = Object.values(requiredWhenEnabled).some((value) => Boolean(value));
+    const hasOidcVars =
+      Object.values(requiredWhenEnabled).some((value) => Boolean(value)) ||
+      adminGroups.length > 0;
     if (hasOidcVars) {
       console.warn("[config] AUTH_MODE=local; ignoring OIDC_* provider settings.");
     }
@@ -271,6 +294,7 @@ const resolveOidcConfig = (authMode: AuthMode): OidcConfig => {
     enforced: authMode === "oidc_enforced",
     providerName: getOptionalEnv("OIDC_PROVIDER_NAME", "OIDC"),
     issuerUrl,
+    discoveryUrl,
     clientId,
     clientSecret,
     redirectUri,
@@ -279,6 +303,8 @@ const resolveOidcConfig = (authMode: AuthMode): OidcConfig => {
     scopes: getOptionalEnv("OIDC_SCOPES", "openid profile email"),
     emailClaim: getOptionalEnv("OIDC_EMAIL_CLAIM", "email"),
     emailVerifiedClaim: getOptionalEnv("OIDC_EMAIL_VERIFIED_CLAIM", "email_verified"),
+    groupsClaim,
+    adminGroups,
     requireEmailVerified: getOptionalBoolean("OIDC_REQUIRE_EMAIL_VERIFIED", true),
     jitProvisioning: getOptionalBoolean("OIDC_JIT_PROVISIONING", true),
     firstUserAdmin: getOptionalBoolean("OIDC_FIRST_USER_ADMIN", true),
