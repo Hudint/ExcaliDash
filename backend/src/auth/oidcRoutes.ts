@@ -607,14 +607,18 @@ export const registerOidcRoutes = (deps: RegisterOidcRoutesDeps) => {
       // Per OIDC spec, fetch the userinfo endpoint if key claims are missing from the ID token.
       // This handles providers that return minimal ID tokens and put profile data in userinfo.
       let userinfoClaims: Record<string, unknown> = {};
-      const needsUserinfo =
+      const emailMissingFromIdToken =
           !readStringClaim(idTokenClaims, config.oidc.emailClaim) &&
           !readStringClaim(idTokenClaims, "email");
-      if (needsUserinfo) {
+      const groupsMissingFromIdToken =
+          config.oidc.adminGroups.length > 0 &&
+          readClaimByPath(idTokenClaims, config.oidc.groupsClaim) === undefined;
+        const needsUserinfo = emailMissingFromIdToken || groupsMissingFromIdToken;
+        if (needsUserinfo) {
         try {
           userinfoClaims = (await client.userinfo(tokenSet)) as Record<string, unknown>;
         } catch (userinfoError) {
-          console.warn("OIDC: userinfo request failed, falling back to ID token claims only:", userinfoError);
+          console.error("OIDC: userinfo request failed, falling back to ID token claims only:", userinfoError);
         }
       }
       const claims: Record<string, unknown> = { ...userinfoClaims, ...idTokenClaims };
