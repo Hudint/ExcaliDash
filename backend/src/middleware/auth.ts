@@ -38,7 +38,12 @@ interface JwtPayload {
   email: string;
   type: "access" | "refresh";
   impersonatorId?: string;
+  authProvider?: "local" | "oidc";
+  oidcGroups?: string[];
 }
+
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((entry) => typeof entry === "string");
 
 const isJwtPayload = (decoded: unknown): decoded is JwtPayload => {
   if (typeof decoded !== "object" || decoded === null) {
@@ -47,11 +52,20 @@ const isJwtPayload = (decoded: unknown): decoded is JwtPayload => {
   const payload = decoded as Record<string, unknown>;
   const impersonatorOk =
     typeof payload.impersonatorId === "undefined" || typeof payload.impersonatorId === "string";
+  const authProviderOk =
+    typeof payload.authProvider === "undefined" ||
+    payload.authProvider === "local" ||
+    payload.authProvider === "oidc";
+  const oidcGroupsOk =
+    typeof payload.oidcGroups === "undefined" ||
+    isStringArray(payload.oidcGroups);
   return (
     typeof payload.userId === "string" &&
     typeof payload.email === "string" &&
     (payload.type === "access" || payload.type === "refresh") &&
-    impersonatorOk
+    impersonatorOk &&
+    authProviderOk &&
+    oidcGroupsOk
   );
 };
 
@@ -109,6 +123,80 @@ export const createAuthMiddleware = ({
   prisma,
   authModeService,
 }: AuthMiddlewareDeps) => {
+  const configuredOidcAdminGroups = new Set(config.oidc.adminGroups);
+
+  const normalizeGroups = (groups: string[] | undefined): string[] =>
+    Array.from(
+      new Set(
+        (groups ?? [])
+          .map((group) => group.trim())
+          .filter((group) => group.length > 0)
+      )
+    );
+
+  const shouldReconcileOidcRole = async (
+    payload: JwtPayload,
+    userId: string
+  ): Promise<boolean> => {
+    if (configuredOidcAdminGroups.size === 0) return false;
+    if (payload.impersonatorId) return false;
+
+    if (payload.authProvider === "oidc") return true;
+    if (payload.authProvider === "local") return false;
+
+    // Backward compatibility for sessions issued before authProvider was encoded.
+    const linkedOidcIdentity = await prisma.authIdentity.findUnique({
+      where: {
+        provider_userId: {
+          provider: "oidc",
+          userId,
+        },
+      },
+      select: { id: true },
+    });
+    return Boolean(linkedOidcIdentity);
+  };
+
+  const reconcileRoleFromOidcGroups = async (
+    payload: JwtPayload,
+    user: {
+      id: string;
+      username: string | null;
+      email: string;
+      name: string;
+      role: string;
+      mustResetPassword: boolean;
+      isActive: boolean;
+    }
+  ) => {
+    if (!(await shouldReconcileOidcRole(payload, user.id))) {
+      return user;
+    }
+
+    const oidcGroups = normalizeGroups(payload.oidcGroups);
+    const shouldBeAdmin = oidcGroups.some((group) =>
+      configuredOidcAdminGroups.has(group)
+    );
+    const expectedRole = shouldBeAdmin ? "ADMIN" : "USER";
+    if (user.role === expectedRole) {
+      return user;
+    }
+
+    return prisma.user.update({
+      where: { id: user.id },
+      data: { role: expectedRole },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        name: true,
+        role: true,
+        mustResetPassword: true,
+        isActive: true,
+      },
+    });
+  };
+
   const requireAuth = async (
     req: Request,
     res: Response,
@@ -179,7 +267,9 @@ export const createAuthMiddleware = ({
         return;
       }
 
-      if (user.mustResetPassword && !isAllowedWhileMustResetPassword(req)) {
+      const resolvedUser = await reconcileRoleFromOidcGroups(payload, user);
+
+      if (resolvedUser.mustResetPassword && !isAllowedWhileMustResetPassword(req)) {
         res.status(403).json({
           error: "Forbidden",
           code: "MUST_RESET_PASSWORD",
@@ -189,12 +279,12 @@ export const createAuthMiddleware = ({
       }
 
       req.user = {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        mustResetPassword: user.mustResetPassword,
+        id: resolvedUser.id,
+        username: resolvedUser.username,
+        email: resolvedUser.email,
+        name: resolvedUser.name,
+        role: resolvedUser.role,
+        mustResetPassword: resolvedUser.mustResetPassword,
         impersonatorId: payload.impersonatorId,
       };
 

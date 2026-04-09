@@ -39,7 +39,7 @@ type RegisterOidcRoutesDeps = {
   generateTokens: (
     userId: string,
     email: string,
-    options?: { impersonatorId?: string }
+    options?: { impersonatorId?: string; authProvider?: "local" | "oidc"; oidcGroups?: string[] }
   ) => { accessToken: string; refreshToken: string };
   setAuthCookies: (
     req: Request,
@@ -58,6 +58,7 @@ type RegisterOidcRoutesDeps = {
       enforced: boolean;
       providerName: string;
       issuerUrl: string | null;
+      discoveryUrl: string | null;
       clientId: string | null;
       clientSecret: string | null;
       redirectUri: string | null;
@@ -65,6 +66,8 @@ type RegisterOidcRoutesDeps = {
       scopes: string;
       emailClaim: string;
       emailVerifiedClaim: string;
+      groupsClaim: string;
+      adminGroups: string[];
       requireEmailVerified: boolean;
       jitProvisioning: boolean;
       firstUserAdmin: boolean;
@@ -195,6 +198,40 @@ const readBooleanClaim = (claims: Record<string, unknown>, key: string): boolean
   return null;
 };
 
+const readClaimByPath = (
+  claims: Record<string, unknown>,
+  keyPath: string
+): unknown => {
+  const segments = keyPath
+    .split(".")
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0);
+  if (segments.length === 0) return undefined;
+
+  let current: unknown = claims;
+  for (const segment of segments) {
+    if (typeof current !== "object" || current === null) return undefined;
+    current = (current as Record<string, unknown>)[segment];
+  }
+  return current;
+};
+
+const normalizeClaimGroups = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value
+      .filter((entry): entry is string => typeof entry === "string")
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
+  }
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
+  }
+  return [];
+};
+
 const getOidcErrorMessage = (errorCode: string): string => {
   switch (errorCode) {
     case "missing_flow":
@@ -274,7 +311,8 @@ export const registerOidcRoutes = (deps: RegisterOidcRoutesDeps) => {
     }
     if (!oidcClientPromise) {
       oidcClientPromise = (async () => {
-        const issuer = await Issuer.discover(config.oidc.issuerUrl as string);
+        const discoveryUrl = config.oidc.discoveryUrl || (config.oidc.issuerUrl as string);
+        const issuer = await Issuer.discover(discoveryUrl);
         const supportedMethods = (issuer as any)?.metadata?.token_endpoint_auth_methods_supported as
           | string[]
           | undefined;
@@ -454,7 +492,29 @@ export const registerOidcRoutes = (deps: RegisterOidcRoutesDeps) => {
           code_verifier: flow.codeVerifier,
         }
       );
-      const claims = tokenSet.claims() as Record<string, unknown>;
+      const idTokenClaims = tokenSet.claims() as Record<string, unknown>;
+
+      // Per OIDC spec, fetch the userinfo endpoint if key claims are missing from the ID token.
+      // This handles providers that return minimal ID tokens and put profile data in userinfo.
+      let userinfoClaims: Record<string, unknown> = {};
+      const emailMissingFromIdToken =
+        !readStringClaim(idTokenClaims, config.oidc.emailClaim) &&
+        !readStringClaim(idTokenClaims, "email");
+      const groupsMissingFromIdToken =
+        config.oidc.adminGroups.length > 0 &&
+        readClaimByPath(idTokenClaims, config.oidc.groupsClaim) === undefined;
+      const needsUserinfo = emailMissingFromIdToken || groupsMissingFromIdToken;
+      if (needsUserinfo) {
+        try {
+          userinfoClaims = (await client.userinfo(tokenSet)) as Record<string, unknown>;
+        } catch (userinfoError) {
+          console.error("OIDC: userinfo request failed, falling back to ID token claims only:", userinfoError);
+        }
+      }
+
+      // Merge: ID token claims take precedence; userinfo fills in missing fields.
+      const claims: Record<string, unknown> = { ...userinfoClaims, ...idTokenClaims };
+
       const issuer = client.issuer.issuer;
       const subject = readStringClaim(claims, "sub");
       if (!subject) {
@@ -478,6 +538,18 @@ export const registerOidcRoutes = (deps: RegisterOidcRoutesDeps) => {
       if (config.oidc.requireEmailVerified && emailVerified !== true) {
         return redirectToLoginWithError(req, res, "unverified_email", flow.returnTo);
       }
+
+      const oidcGroups = Array.from(
+        new Set(
+          normalizeClaimGroups(
+            readClaimByPath(claims, config.oidc.groupsClaim)
+          )
+        )
+      );
+      const adminGroups = new Set(config.oidc.adminGroups);
+      const shouldBeAdmin =
+        adminGroups.size > 0 &&
+        oidcGroups.some((group) => adminGroups.has(group));
 
       const user = await prisma.$transaction(async (tx) => {
         const linkedIdentity = await tx.authIdentity.findUnique({
@@ -558,6 +630,17 @@ export const registerOidcRoutes = (deps: RegisterOidcRoutesDeps) => {
           },
         });
 
+        if (adminGroups.size > 0) {
+          const nextRole = shouldBeAdmin ? "ADMIN" : "USER";
+          if (resolvedUser.role !== nextRole) {
+            resolvedUser = await tx.user.update({
+              where: { id: resolvedUser.id },
+              data: { role: nextRole },
+              select: userSelect,
+            });
+          }
+        }
+
         return resolvedUser;
       });
 
@@ -565,7 +648,10 @@ export const registerOidcRoutes = (deps: RegisterOidcRoutesDeps) => {
         return redirectToLoginWithError(req, res, "account_inactive", flow.returnTo);
       }
 
-      const { accessToken, refreshToken } = generateTokens(user.id, user.email);
+      const { accessToken, refreshToken } = generateTokens(user.id, user.email, {
+        authProvider: "oidc",
+        oidcGroups,
+      });
       setAuthCookies(req, res, { accessToken, refreshToken });
 
       if (config.enableRefreshTokenRotation) {
