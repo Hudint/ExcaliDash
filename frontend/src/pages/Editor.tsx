@@ -165,7 +165,15 @@ function buildValidateEmbeddable(): boolean | RegExp[] {
     .map((s) => s.trim())
     .filter(Boolean);
   if (patterns.length === 0) return false;
-  return patterns.map((p) => new RegExp(p));
+  const regexps: RegExp[] = [];
+  for (const p of patterns) {
+    try {
+      regexps.push(new RegExp(p));
+    } catch {
+      console.warn(`[ExcaliDash] Invalid regex in VITE_EMBEDDABLE_SCHEMAS, skipping: "${p}"`);
+    }
+  }
+  return regexps.length > 0 ? regexps : false;
 }
 
 const validateEmbeddable = buildValidateEmbeddable();
