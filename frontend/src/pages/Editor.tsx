@@ -157,6 +157,19 @@ class DrawingSaveConflictError extends Error {
   }
 }
 
+function buildValidateEmbeddable(): boolean | RegExp[] {
+  const raw = import.meta.env.VITE_EMBEDDABLE_SCHEMAS as string | undefined;
+  if (!raw || !raw.trim()) return false;
+  const patterns = raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (patterns.length === 0) return false;
+  return patterns.map((p) => new RegExp(p));
+}
+
+const validateEmbeddable = buildValidateEmbeddable();
+
 export const Editor: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -1838,6 +1851,7 @@ export const Editor: React.FC = () => {
             excalidrawAPI={setExcalidrawAPI}
             UIOptions={UIOptions}
             viewModeEnabled={!canEdit}
+            validateEmbeddable={validateEmbeddable}
           />
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-gray-500 dark:text-gray-400">

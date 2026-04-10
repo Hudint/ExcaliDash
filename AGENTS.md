@@ -259,6 +259,7 @@ Frontend variables:
 - `VITE_API_URL` (default `/api`)
 - `VITE_APP_VERSION` (from build-time metadata)
 - `VITE_APP_BUILD_LABEL` (build metadata label)
+- `VITE_EMBEDDABLE_SCHEMAS` (comma-separated list of regex patterns for allowed embeddable URL schemas; unset or empty disables all embeds; e.g. `.*` to allow everything)
 - `BACKEND_URL` (frontend container entrypoint only; default `backend:8000`, injected into nginx template)
 
 E2E variables:
