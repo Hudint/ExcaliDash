@@ -7,6 +7,7 @@ import {
   convertToExcalidrawElements,
   exportToSvg,
   viewportCoordsToSceneCoords,
+  CaptureUpdateAction,
 } from '@excalidraw/excalidraw';
 import debounce from 'lodash/debounce';
 import throttle from 'lodash/throttle';
@@ -1544,7 +1545,7 @@ export const Editor: React.FC = () => {
               imageElements.map((element: any) => [element.id, true])
             ),
           },
-          commitToHistory: true,
+          captureUpdate: CaptureUpdateAction.IMMEDIATELY,
         });
       } catch (err) {
         console.error("[Editor] Failed to import dropped images", err);

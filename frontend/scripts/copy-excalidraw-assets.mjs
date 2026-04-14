@@ -13,8 +13,6 @@ const EXCALIDRAW_DIST_DIR = path.join(
   "dist"
 );
 
-const assetDirs = ["excalidraw-assets", "excalidraw-assets-dev"];
-
 const copyDir = async (src, dest) => {
   await fs.rm(dest, { recursive: true, force: true });
   await fs.mkdir(path.dirname(dest), { recursive: true });
@@ -29,6 +27,10 @@ const getTargets = () => {
   return targets.length > 0 ? targets : ["dist"];
 };
 
+// In Excalidraw 0.18.0 the asset layout changed:
+//   dev  fonts:  dist/dev/fonts/
+//   prod fonts:  dist/prod/fonts/
+// Both are copied to <target>/fonts/ so EXCALIDRAW_ASSET_PATH = "/" resolves them.
 const main = async () => {
   const targets = getTargets();
 
@@ -36,21 +38,20 @@ const main = async () => {
     const targetRoot = path.join(frontendRoot, targetName);
     await fs.mkdir(targetRoot, { recursive: true });
 
-    for (const dirName of assetDirs) {
-      const src = path.join(EXCALIDRAW_DIST_DIR, dirName);
-      const destRoot = path.join(targetRoot, dirName);
+    // Choose the matching build variant for the target directory.
+    const variant = targetName === "public" ? "dev" : "prod";
+    const src = path.join(EXCALIDRAW_DIST_DIR, variant, "fonts");
+    const dest = path.join(targetRoot, "fonts");
 
-      try {
-        await fs.access(src);
-      } catch (err) {
-        console.error(`[copy-excalidraw-assets] Missing source dir: ${src}`);
-        throw err;
-      }
-
-      await copyDir(src, destRoot);
-
-      console.log(`[copy-excalidraw-assets] Copied ${dirName} -> ${targetName}`);
+    try {
+      await fs.access(src);
+    } catch (err) {
+      console.error(`[copy-excalidraw-assets] Missing source dir: ${src}`);
+      throw err;
     }
+
+    await copyDir(src, dest);
+    console.log(`[copy-excalidraw-assets] Copied ${variant}/fonts -> ${targetName}/fonts`);
   }
 };
 

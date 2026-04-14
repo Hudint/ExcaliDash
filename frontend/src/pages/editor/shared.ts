@@ -1,5 +1,9 @@
 import { applyElementOrder, reconcileElements } from "../../utils/sync";
 
+// CaptureUpdateAction.NEVER = "NEVER" — use literal to avoid pulling in the
+// full @excalidraw/excalidraw bundle in non-editor contexts (e.g. unit tests).
+const NEVER = "NEVER" as const;
+
 export interface ElementVersionInfo {
   version: number;
   versionNonce: number;
@@ -10,16 +14,16 @@ export interface ElementVersionInfo {
 type RemoteSceneUpdate =
   | {
       collaborators: Map<string, any>;
-      commitToHistory: false;
+      captureUpdate: typeof NEVER;
     }
   | {
       elements: any[];
       files?: Record<string, any>;
-      commitToHistory: false;
+      captureUpdate: typeof NEVER;
     }
   | {
       files: Record<string, any>;
-      commitToHistory: false;
+      captureUpdate: typeof NEVER;
     };
 
 type BuildRemoteSceneUpdateInput = {
@@ -53,7 +57,7 @@ export const buildRemoteSceneUpdate = ({
     return {
       sceneUpdate: {
         collaborators,
-        commitToHistory: false,
+        captureUpdate: NEVER,
       },
       mergedElements: null,
       nextFiles: lastSyncedFiles,
@@ -78,7 +82,7 @@ export const buildRemoteSceneUpdate = ({
       sceneUpdate: {
         elements: mergedElements,
         ...(shouldUpdateFiles ? { files: nextFiles } : {}),
-        commitToHistory: false,
+        captureUpdate: NEVER,
       },
       mergedElements,
       nextFiles,
@@ -90,7 +94,7 @@ export const buildRemoteSceneUpdate = ({
     return {
       sceneUpdate: {
         files: nextFiles,
-        commitToHistory: false,
+        captureUpdate: NEVER,
       },
       mergedElements: null,
       nextFiles,
