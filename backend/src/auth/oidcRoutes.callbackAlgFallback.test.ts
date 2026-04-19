@@ -159,6 +159,7 @@ const createApp = async (idTokenAlgOverride: string | null) => {
         enforced: true,
         providerName: "Test OIDC",
         issuerUrl: "https://issuer.example",
+        discoveryUrl: null,
         clientId: "client-id",
         clientSecret: "client-secret",
         redirectUri: "https://app.example/api/auth/oidc/callback",

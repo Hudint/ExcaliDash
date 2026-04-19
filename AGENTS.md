@@ -246,8 +246,6 @@ Backend base variables:
 - `OIDC_REQUIRE_EMAIL_VERIFIED` (default `true`)
 - `OIDC_JIT_PROVISIONING` (default `true`)
 - `OIDC_FIRST_USER_ADMIN` (default `true`)
-- `OIDC_GROUPS_CLAIM` (default `groups`; claim path carrying group/role membership, dot notation supported e.g. `realm_access.roles`)
-- `OIDC_ADMIN_GROUPS` (optional; comma-separated IdP groups/roles that grant `ADMIN` — users in a listed group are promoted, users outside all listed groups are demoted to `USER`)
 
 Backend Docker/env control variables:
 

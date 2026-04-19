@@ -393,21 +393,14 @@ export const createAuthRouter = (deps: CreateAuthRouterDeps): express.Router => 
   const generateTokens = (
     userId: string,
     email: string,
-    options?: { impersonatorId?: string; authProvider?: "local" | "oidc"; oidcGroups?: string[] }
+    options?: { impersonatorId?: string }
   ) => {
     const signOptions: SignOptions = {
       expiresIn: config.jwtAccessExpiresIn as StringValue,
       jwtid: crypto.randomUUID(),
     };
     const accessToken = jwt.sign(
-      {
-        userId,
-        email,
-        type: "access",
-        impersonatorId: options?.impersonatorId,
-        authProvider: options?.authProvider,
-        oidcGroups: options?.oidcGroups,
-      },
+      { userId, email, type: "access", impersonatorId: options?.impersonatorId },
       config.jwtSecret,
       signOptions
     );

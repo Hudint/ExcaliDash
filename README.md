@@ -286,9 +286,6 @@ backend:
     # - OIDC_ID_TOKEN_SIGNED_RESPONSE_ALG=HS256
     - OIDC_REDIRECT_URI=https://excalidash.example.com/api/auth/oidc/callback
     - OIDC_SCOPES=openid profile email
-    # Optional: map IdP group membership to the ADMIN role
-    # - OIDC_GROUPS_CLAIM=groups
-    # - OIDC_ADMIN_GROUPS=excalidash-admins,platform-admins
 ```
 
 Quick preflight check (recommended before starting backend):
@@ -307,17 +304,16 @@ Copy one to `backend/.env`, update issuer/client/redirect values, then run `npm 
 
 Notes:
 
-| Topic                       | Notes                                                                                                                         |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| OIDC-only (`oidc_enforced`) | You typically do not use local bootstrap admin registration; first admin can be created through your IdP depending on config. |
-| Reverse proxy               | Set `FRONTEND_URL` and `TRUST_PROXY` correctly or auth + websockets may fail.                                                 |
-| ID token algorithm          | ExcaliDash defaults to `RS256`. If your IdP client is explicitly configured for another signed ID-token algorithm such as `HS256`, set `OIDC_ID_TOKEN_SIGNED_RESPONSE_ALG` to match that exact client setting. `none` is not allowed, and `HS*` requires `OIDC_CLIENT_SECRET`. |
-| Keycloak issuer format      | Use realm issuer URL: `https://<keycloak-host>/realms/<realm>`.                                                               |
-| Authentik issuer format     | Use provider issuer URL: `https://<authentik-host>/application/o/<provider-slug>/`.                                           |
-| Authentik `email_verified`  | If Authentik does not emit `email_verified=true`, either add the scope mapping or set `OIDC_REQUIRE_EMAIL_VERIFIED=false`.   |
-| Redirect URI                | Must be exact callback: `https://<excalidash-host>/api/auth/oidc/callback`.                                                   |
-| Split-horizon DNS (`OIDC_DISCOVERY_URL`) | In Docker Compose or Kubernetes the backend container may not be able to reach your IdP's public hostname. Set `OIDC_DISCOVERY_URL` to an internal URL so the backend can fetch `.well-known/openid-configuration` without changing `OIDC_ISSUER_URL`, which must stay as the public URL for issuer validation and browser redirects. |
-| Admin group mapping         | Set `OIDC_GROUPS_CLAIM` to the claim that carries group/role membership (dot notation supported, e.g. `realm_access.roles`) and `OIDC_ADMIN_GROUPS` to a comma-separated list of groups that should grant the `ADMIN` role. Users in a listed group are promoted; users outside all listed groups are demoted to `USER`. |
+| Topic                       | Notes                                                                                                                                                                                                                                                                                                                                 |
+|-----------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| OIDC-only (`oidc_enforced`) | You typically do not use local bootstrap admin registration; first admin can be created through your IdP depending on config.                                                                                                                                                                                                         |
+| Reverse proxy               | Set `FRONTEND_URL` and `TRUST_PROXY` correctly or auth + websockets may fail.                                                                                                                                                                                                                                                         |
+| ID token algorithm          | ExcaliDash defaults to `RS256`. If your IdP client is explicitly configured for another signed ID-token algorithm such as `HS256`, set `OIDC_ID_TOKEN_SIGNED_RESPONSE_ALG` to match that exact client setting. `none` is not allowed, and `HS*` requires `OIDC_CLIENT_SECRET`.                                                        |
+| Keycloak issuer format      | Use realm issuer URL: `https://<keycloak-host>/realms/<realm>`.                                                                                                                                                                                                                                                                       |
+| Authentik issuer format     | Use provider issuer URL: `https://<authentik-host>/application/o/<provider-slug>/`.                                                                                                                                                                                                                                                   |
+| Authentik `email_verified`  | If Authentik does not emit `email_verified=true`, either add the scope mapping or set `OIDC_REQUIRE_EMAIL_VERIFIED=false`.                                                                                                                                                                                                            |
+| Redirect URI                | Must be exact callback: `https://<excalidash-host>/api/auth/oidc/callback`.                                                                                                                                                                                                                                                           |
+| OIDC_DISCOVERY_URL          | In Docker Compose or Kubernetes the backend container may not be able to reach your IdP's public hostname. Set `OIDC_DISCOVERY_URL` to an internal URL so the backend can fetch `.well-known/openid-configuration` without changing `OIDC_ISSUER_URL`, which must stay as the public URL for issuer validation and browser redirects. |
 
 </details>
 
